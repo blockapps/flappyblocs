@@ -72,7 +72,7 @@ function startGame() {
     myGamePiece.gravity = startingGravity;
     let w = window.innerWidth / 2;
     let h = window.innerHeight / 2;
-    myScore = new component("30px", "Consolas", "black", w - 200, 40, "text");
+    myScore = new component("30px", "Consolas", "black", 10, 30, "text");
     mySpeed = new component("15px", "Consolas", "black", 0, h - 5, "text");
     myBad = new component("72px", "Comic Sans", "black", w / 4, h / 4, "text");
     myGameArea.start();
@@ -317,10 +317,11 @@ function accelerate(n) {
 
 function restart() {
     myObstacles = [];
-    myGamePiece.y = startingY;
+    myGamePiece.x = MAX_WORLD_X * Math.random();
+    myGamePiece.y = MAX_WORLD_Y * Math.random();
+    myGamePiece.speedX = 0;
     myGamePiece.speedY = 0;
-    myGamePiece.gravity = startingGravity;
-    myGamePiece.gravitySpeed = 0;
+    myGamePiece.score = 50;
     myGameArea.frameNo = 0;
 }
 
@@ -337,6 +338,7 @@ function makeRandomColor(){
 <p><font color="white">Use the arrow keys to move your cell</p>
 <p><font color="white">Press ENTER to restart the game</p>
 <p>Save how long stayed alive to the chain!!</font></p>
+<p>INSTRUCTIONS: Eat smaller cells. Avoid larger cells</p>
 
 <form action='#' id='dapp-form'>
   <!--STRATO blockchain username-->
