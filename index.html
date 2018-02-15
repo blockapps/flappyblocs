@@ -7,13 +7,12 @@
 <style>
 canvas {
     border:1px solid #d3d3d3;
-    background-color: #f1f1f1;
+    background-color: #2d86e6;
 }
-
 body {
-  background-image: url("https://i.imgur.com/rBZ2QrQ.jpg");
+  background-image: url("bezos.jpg");
   background-size: 100%;
-  background-repeat: no-repeat;
+  background-repeat: repeat;
 }
 
 </style>
@@ -33,20 +32,57 @@ s.parentNode.insertBefore(hm, s);
 
 var myGamePiece;
 var myObstacles = [];
+var myCandies = [];
 var myScore;
+var mySpeed;
+const startingY = 120;
+const startingGravity = 0.05;
+const MAX_WORLD_X = 2000;
+const MAX_WORLD_Y = 2000;
+const ENTER = 13;
+const LEFT  = 37;
+const UP    = 38;
+const RIGHT = 39;
+const DOWN  = 40;
+
+
+document.onkeydown = function(e) {
+    if(e.keyCode == LEFT) {
+	myGamePiece.speedX -= 1;
+    } else if (e.keyCode == UP) {
+	myGamePiece.speedY -= 1;
+    } else if (e.keyCode == RIGHT) {
+	myGamePiece.speedX += 1;
+    } else if (e.keyCode == DOWN) {
+	myGamePiece.speedY += 1;
+    } else if (e.keyCode == ENTER) {
+	restart();
+	return;
+    }
+    myGamePiece.limitSpeed();
+}
 
 function startGame() {
-    myGamePiece = new component(30, 30, "red", 10, 120);
-    myGamePiece.gravity = 0.05;
-    myScore = new component("30px", "Consolas", "black", 280, 40, "text");
+    x = Math.floor(Math.random() * (MAX_WORLD_X + 1));
+    y = Math.floor(Math.random() * (MAX_WORLD_Y + 1));
+    dx = (2 * Math.random()) - 1;
+    dy = (2 * Math.random()) - 1;
+    s = 50;
+    myGamePiece = new playerCell("red", x, y, dx, dy, s);
+    myGamePiece.gravity = startingGravity;
+    let w = window.innerWidth / 2;
+    let h = window.innerHeight / 2;
+    myScore = new component("30px", "Consolas", "black", w - 200, 40, "text");
+    mySpeed = new component("15px", "Consolas", "black", 0, h - 5, "text");
+    myBad = new component("72px", "Comic Sans", "black", w / 4, h / 4, "text");
     myGameArea.start();
 }
 
 var myGameArea = {
     canvas : document.createElement("canvas"),
     start : function() {
-        this.canvas.width = 480;
-        this.canvas.height = 270;
+        this.canvas.width = window.innerWidth / 2;
+        this.canvas.height = window.innerHeight / 2;
         this.context = this.canvas.getContext("2d");
         document.body.insertBefore(this.canvas, document.body.childNodes[0]);
         this.frameNo = 0;
@@ -54,6 +90,124 @@ var myGameArea = {
         },
     clear : function() {
         this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+}
+
+function playerCell(color, x, y, dx, dy, score) {
+    this.score = score;
+    this.radius = function() { 
+	let max_d = Math.min(myGameArea.canvas.width, myGameArea.canvas.height);
+	return this.score >= 1000 ? (3 * max_d) / 10 : (3 * this.score * max_d) / 10000; 
+    }
+    this.speedX = dx;
+    this.speedY = dy;
+    this.x = x;
+    this.y = y;
+    this.update = function() {
+	ctx = myGameArea.context;
+	let radius = this.radius();
+	ctx.beginPath();
+	ctx.arc(myGameArea.canvas.width/2, myGameArea.canvas.height/2, radius, 0, 2 * Math.PI, false);
+	ctx.fillStyle = color;
+	ctx.fill();
+	ctx.lineWidth = 5;
+	ctx.strokeStyle = 'black';
+	ctx.stroke();
+    }
+    this.newPos = function() {
+	this.x += this.speedX;
+	this.y += this.speedY;
+	this.hitBoundary();
+    }
+    this.limitSpeed = function() {
+	let maxDirectionalSpeed = 1 + (10 / ((this.score / 50) + 1));
+	if (Math.abs(this.speedX) > maxDirectionalSpeed) {
+            this.speedX = Math.sign(this.speedX) * maxDirectionalSpeed;
+	}
+	if (Math.abs(this.speedY) > maxDirectionalSpeed) {
+	    this.speedY = Math.sign(this.speedY) * maxDirectionalSpeed;
+	}
+    }
+    this.hitBoundary = function() {
+	if(this.x <= 0 || this.x >= MAX_WORLD_X) {
+            this.speedX = 0;
+	    if(this.x <= 0) {
+		this.x = 0;
+	    } else {
+		this.x = MAX_WORLD_X;
+            }
+        }
+	if(this.y <= 0 || this.y >= MAX_WORLD_Y) {
+	    this.speedY = 0;
+	    if(this.y <= 0) {
+		this.y = 0;
+	    } else {
+		this.y = MAX_WORLD_Y;
+            }
+	}
+    }
+    this.crashWith = function(otherobj) {
+	let r = this.radius();
+	let s = (r * otherobj.score)/this.score;
+	let mag = Math.abs(r - s);
+	let dx = this.x - otherobj.x;
+	let dy = this.y - otherobj.y;
+	let d2 = dx*dx + dy*dy;
+	if (d2 < mag*mag) {
+             if (r >= 1.25 * s) { // you ate them
+                 return 1;
+	     } else if (s >= 1.25 * r) {
+		 return 2;
+	     } else {
+                 return 0;
+             }
+	} else {
+	    return 0;
+	}
+    }
+}
+    
+function opponentCell(color, x, y, dx, dy, score) {
+    this.score = score;
+    this.speedX = dx;
+    this.speedY = dy;
+    this.x = x;
+    this.y = y;
+    this.update = function(otherX, otherY, otherScore, otherRadius) {
+	let relX = myGameArea.canvas.width/2 + (this.x - otherX);
+	let relY = myGameArea.canvas.height/2 + (this.y - otherY);
+	ctx = myGameArea.context;
+	let radius = (this.score * otherRadius) / otherScore;
+	ctx.beginPath();
+	ctx.arc(relX, relY, radius, 0, 2 * Math.PI, false);
+	ctx.fillStyle = color;
+	ctx.fill();
+	ctx.lineWidth = 5;
+	ctx.strokeStyle = 'black';
+	ctx.stroke();
+    }
+    this.newPos = function() {
+	this.x += this.speedX;
+	this.y += this.speedY;
+	this.hitBoundary();
+    }
+    this.hitBoundary = function() {
+	if(this.x <= 0 || this.x >= MAX_WORLD_X) {
+            this.speedX = -this.speedX;
+	    if(this.x <= 0) {
+		this.x = 0;
+	    } else {
+		this.x = MAX_WORLD_X;
+            }
+        }
+	if(this.y <= 0 || this.y >= MAX_WORLD_Y) {
+	    this.speedY = -this.speedY;
+	    if(this.y <= 0) {
+		this.y = 0;
+	    } else {
+		this.y = MAX_WORLD_Y;
+            }
+	}
     }
 }
 
@@ -110,47 +264,78 @@ function component(width, height, color, x, y, type) {
 }
 
 function updateGameArea() {
-    var x, height, gap, minHeight, maxHeight, minGap, maxGap;
     for (i = 0; i < myObstacles.length; i += 1) {
-        if (myGamePiece.crashWith(myObstacles[i])) {
-            return;
-        }
+        let q = myGamePiece.crashWith(myObstacles[i]);
+	if(q == 1) {
+	    myGamePiece.score += myObstacles[i].score;
+	    myObstacles.splice(i,1);
+	} else if(q == 2) {
+	    myBad.text="YOU LOST!!";
+	    myBad.update();
+	    return;
+	}
     }
     myGameArea.clear();
     myGameArea.frameNo += 1;
-    if (myGameArea.frameNo == 1 || everyinterval(150)) {
-        x = myGameArea.canvas.width;
-        minHeight = 20;
-        maxHeight = 200;
-        height = Math.floor(Math.random()*(maxHeight-minHeight+1)+minHeight);
-        minGap = 50;
-        maxGap = 200;
-        gap = Math.floor(Math.random()*(maxGap-minGap+1)+minGap);
-        myObstacles.push(new component(10, height, "green", x, 0));
-        myObstacles.push(new component(10, x - height - gap, "green", x, height + gap));
+    if (myGameArea.frameNo == 1 || everyinterval(100)) {
+	var bad = true;
+	var o;
+	while(bad) {
+        let x = Math.floor(Math.random() * (MAX_WORLD_X + 1));
+        let y = Math.floor(Math.random() * (MAX_WORLD_Y + 1));
+	let s = Math.floor(5*myGamePiece.score*Math.pow(Math.random(), 4) + 10);
+	let maxDirectionalSpeed = 1 + (10 / ((s / 50) + 1));
+	let theta = 2 * Math.PI * Math.random();
+        let dx = maxDirectionalSpeed * Math.cos(theta);
+        let dy = maxDirectionalSpeed * Math.sin(theta);
+	o = new opponentCell(makeRandomColor(), x, y, dx, dy, s);
+	let c = myGamePiece.crashWith(o);
+	bad = (c == 2);
+	}
+        myObstacles.push(o);
     }
     for (i = 0; i < myObstacles.length; i += 1) {
-        myObstacles[i].x += -1;
-        myObstacles[i].update();
+	myObstacles[i].newPos();
+        myObstacles[i].update(myGamePiece.x, myGamePiece.y, myGamePiece.score, myGamePiece.radius());
     }
-    myScore.text="SCORE: " + myGameArea.frameNo;
+    myScore.text="SCORE: " + myGamePiece.score;
     myScore.update();
+    mySpeed.text="x: " + Math.floor(myGamePiece.x) + ",y: " + Math.floor(myGamePiece.y) + ",dx: " + Math.floor(myGamePiece.speedX) + ", dy: " + Math.floor(myGamePiece.speedY);
+    mySpeed.update();
     myGamePiece.newPos();
     myGamePiece.update();
 }
 
 function everyinterval(n) {
-    if ((myGameArea.frameNo / n) % 1 == 0) {return true;}
+    if (myObstacles.length < 2048 && (myGameArea.frameNo / n) % 1 == 0) {return true;}
     return false;
 }
 
 function accelerate(n) {
     myGamePiece.gravity = n;
 }
+
+function restart() {
+    myObstacles = [];
+    myGamePiece.y = startingY;
+    myGamePiece.speedY = 0;
+    myGamePiece.gravity = startingGravity;
+    myGamePiece.gravitySpeed = 0;
+    myGameArea.frameNo = 0;
+}
+
+function makeRandomColor(){
+    var c = '';
+    while(c.length < 7) {
+	c += (Math.random()).toString(16).substr(-6);
+    }
+    return '#'+c.substring(2,8);
+}
+
 </script>
 <br>
-<button onmousedown="accelerate(-0.2)" onmouseup="accelerate(0.05)">ACCELERATE</button>
-<p><font color="white">Use the ACCELERATE button to stay in the air</p>
+<p><font color="white">Use the arrow keys to move your cell</p>
+<p><font color="white">Press ENTER to restart the game</p>
 <p>Save how long stayed alive to the chain!!</font></p>
 
 <form action='#' id='dapp-form'>
